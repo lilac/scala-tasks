@@ -13,7 +13,7 @@ import com.whiteprompt.services.TaskService
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-object Main extends App with Config with Routes {
+object Main extends App with Config {
   implicit val system = ActorSystem("api-akka-http-system")
   implicit val executor = system.dispatcher
   implicit val materializer = ActorMaterializer()
@@ -23,7 +23,7 @@ object Main extends App with Config with Routes {
   val taskService = system.actorOf(FromConfig.props(TaskService.props(TaskRepository())), TaskService.Name)
 
   // Initialize server
-  Http().bindAndHandle(routes, httpInterface, httpPort)
+  Http().bindAndHandle(Routes.route, httpInterface, httpPort)
 
   scala.sys.addShutdownHook{
     log.info("Shutting down server and actor system")
