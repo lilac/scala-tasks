@@ -1,12 +1,14 @@
 package com.whiteprompt.api
 
+import akka.actor.ActorSystem
 import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.Route
 
-trait Routes extends TaskRoutes {
-
-  val routes =
+class Routes(implicit val system: ActorSystem) {
+  val taskRoute: Route = new TaskRoutes().route
+  val route: Route =
     pathPrefix("v1") {
-      tasksRoutes
+      taskRoute
     } ~
     path("health-check"){
       get {

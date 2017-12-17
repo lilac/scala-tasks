@@ -1,33 +1,33 @@
 package com.whiteprompt.api
 
-import akka.actor.ActorRef
+import scala.concurrent.duration._
+
+import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.Location
 import akka.http.scaladsl.server.Directives._
-import akka.pattern.ask
+import akka.http.scaladsl.server.Route
 import akka.util.Timeout
 import com.whiteprompt.api.utils.Json4sJacksonSupport
-import com.whiteprompt.domain.{Task, TaskEntity}
-import com.whiteprompt.services.TaskService
-
-import scala.concurrent.duration._
+import com.whiteprompt.domain.Task
+import com.whiteprompt.persistence.TaskRepository
+import com.whiteprompt.services.TaskManager
 
 case class TaskData(name: String, description: String) extends Task {
   require(name.nonEmpty)
   require(description.nonEmpty)
 }
 
-trait TaskRoutes extends Json4sJacksonSupport {
-  import TaskService._
-
+class TaskRoutes(implicit val system: ActorSystem) extends Json4sJacksonSupport {
   implicit val timeout = Timeout(5 seconds)
+  private val ec = system.dispatchers.lookup("contexts.single-thread")
 
-  val taskService: ActorRef
+  lazy val taskManager: TaskManager = new TaskManager(TaskRepository()(ec))
 
-  def create =
+  def create: Route =
     (pathEnd & post & entity(as[TaskData])) { task =>
       extractUri { uri =>
-        onSuccess((taskService ? CreateTask(task)).mapTo[TaskEntity]) { task =>
+        onSuccess(taskManager.create(task)) { task =>
           respondWithHeader(Location(s"$uri/${task.id}")) {
             complete(StatusCodes.Created)
           }
@@ -35,38 +35,38 @@ trait TaskRoutes extends Json4sJacksonSupport {
       }
     }
 
-  def retrieve =
+  def retrieve: Route =
     (path(JavaUUID) & get) { id =>
-      onSuccess((taskService ? RetrieveTask(id)).mapTo[Option[TaskEntity]]) {
+      onSuccess(taskManager.retrieve(id)) {
         case Some(task) => complete(task)
         case None => complete(StatusCodes.NotFound)
       }
     }
 
-  def update =
+  def update: Route =
     (path(JavaUUID) & put & entity(as[TaskData])) { (id, task)  =>
-      onSuccess((taskService ? UpdateTask(id, task)).mapTo[Option[TaskEntity]]) {
+      onSuccess(taskManager.update(id, task)) {
         case Some(task) => complete(task)
         case None => complete(StatusCodes.NotFound)
       }
     }
 
-  def remove =
+  def remove: Route =
     (path(JavaUUID) & delete) { id =>
-      onSuccess((taskService ? DeleteTask(id)).mapTo[Option[TaskEntity]]) {
+      onSuccess(taskManager.delete(id)) {
         case Some(_) => complete(StatusCodes.NoContent)
         case None => complete(StatusCodes.NotFound)
       }
     }
 
-  def list =
+  def list: Route =
     (pathEnd & get) {
-      onSuccess((taskService ? ListTasks).mapTo[Seq[TaskEntity]]) { tasks =>
+      onSuccess(taskManager.list()) { tasks =>
         complete(tasks)
       }
     }
 
-  def tasksRoutes =
+  def route: Route =
     pathPrefix("tasks") {
       create ~
       retrieve ~
