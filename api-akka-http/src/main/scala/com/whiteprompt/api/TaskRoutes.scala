@@ -2,6 +2,7 @@ package com.whiteprompt.api
 
 import scala.concurrent.duration._
 
+import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.headers.Location
 import akka.http.scaladsl.server.Directives._
@@ -17,12 +18,11 @@ case class TaskData(name: String, description: String) extends Task {
   require(description.nonEmpty)
 }
 
-object TaskRoutes extends Json4sJacksonSupport {
-  import scala.concurrent.ExecutionContext.Implicits.global
-
+class TaskRoutes(implicit val system: ActorSystem) extends Json4sJacksonSupport {
   implicit val timeout = Timeout(5 seconds)
+  private val ec = system.dispatchers.lookup("contexts.single-thread")
 
-  lazy val taskManager: TaskManager = new TaskManager(TaskRepository())
+  lazy val taskManager: TaskManager = new TaskManager(TaskRepository()(ec))
 
   def create: Route =
     (pathEnd & post & entity(as[TaskData])) { task =>
