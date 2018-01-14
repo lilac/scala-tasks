@@ -5,24 +5,35 @@ import io.gatling.http.Predef._
 
 class WsSimulation extends Simulation {
   val httpConf = http
-    .baseURL("http://echo.websocket.org")
+    .baseURL("http://localhost:8080")
     .userAgentHeader("Gatling2")
-    .wsBaseURL("wss://echo.websocket.org")
+    .wsBaseURL("ws://localhost:8080")
 
   val scn = scenario("WebSocket")
     .exec(ws("Connect WS").open("/"))
     .pause(1)
+    .exec(session => session.set("id", session.userId))
     .repeat(2, "i") {
-      exec(ws("Say Hello WS")
-        .sendText("""{"text": "Hello, this is message ${i}!"}""")
-        .check(wsAwait.within(30).until(1).regex(".*message ${i}.*"))
+      def id = "${id}-${i}"
+      def text = "Hello, I am ${id}. This is message ${i}!"
+      def msg = s"""
+          |{
+          | "id": "$id",
+          | "text": "$text"
+          |}
+        """.stripMargin
+      exec(
+        ws("Say Hello WS")
+        .sendText(msg)
+        .check(wsAwait.within(10).until(1).regex(".*ack.*"))
       ).pause(1)
     }
+    .pause(10)
     .exec(ws("Close WS").close)
 
   setUp(
     scn.inject(
-      constantUsersPerSec(10) during (1 seconds)
+      constantUsersPerSec(1000) during (1 seconds)
     )
   ).protocols(httpConf)
 }
